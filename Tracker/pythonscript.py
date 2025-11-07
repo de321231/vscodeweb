@@ -15,6 +15,8 @@ import datetime
 from typing import List, Dict
 import matplotlib.pyplot as plt
 import math
+import getpass
+import sys
 
 # ANSI escape sequences for colors
 RESET = "\033[0m"
@@ -112,40 +114,53 @@ class ExpenseTracker:
                 s = s.replace(",", ".")
         return float(s)
 
+    def delete_entry(self, index: int) -> bool:
+        """
+        Löscht einen Eintrag anhand 1-basierter Nummer. Gibt True bei Erfolg zurück.
+        """
+        if index < 1 or index > len(self.expenses):
+            return False
+        # entferne Eintrag
+        del self.expenses[index - 1]
+        self.save_expenses()
+        return True
+
     def view_expenses(self):
         if not self.expenses:
-            print("No expenses recorded yet.")
+            print("Noch keine Ausgaben erfasst.")
             return
 
-        # dynamische Spaltenbreiten ermitteln
+        # dynamische Spaltenbreiten ermitteln (inkl. Nr.)
+        nr_w = max(len("Nr."), len(str(len(self.expenses))))
         date_w = max(10, max((len(exp.date) for exp in self.expenses), default=10))
-        cat_w = max(len("Category"), max((len(exp.category) for exp in self.expenses), default=8))
-        desc_w = max(len("Description"), max((len(exp.description) for exp in self.expenses), default=30))
-        # Breite der Amount-Spalte anhand formatierten Beträgen
+        cat_w = max(len("Kategorie"), max((len(exp.category) for exp in self.expenses), default=8))
+        desc_w = max(len("Beschreibung"), max((len(exp.description) for exp in self.expenses), default=30))
+        # Breite der Betrag-Spalte anhand formatierter Beträge
         all_amounts = [self.format_amount(exp.amount) for exp in self.expenses]
         all_amounts.append(self.format_amount(self.get_total()))
-        amt_w = max(len("Amount"), max((len(a) for a in all_amounts), default=12))
+        amt_w = max(len("Betrag"), max((len(a) for a in all_amounts), default=12))
 
         # Gesamtbreite für Trennlinie
-        total_width = date_w + 3 + cat_w + 3 + desc_w + 3 + amt_w
+        total_width = nr_w + 3 + date_w + 3 + cat_w + 3 + desc_w + 3 + amt_w
 
-        # Kopfzeile
-        header = f"{'Date':<{date_w}} | {'Category':<{cat_w}} | {'Description':<{desc_w}} | {'Amount':>{amt_w}}"
+        # Kopfzeile (Deutsch) mit Nr.
+        header = f"{'Nr.':<{nr_w}} | {'Datum':<{date_w}} | {'Kategorie':<{cat_w}} | {'Beschreibung':<{desc_w}} | {'Betrag':>{amt_w}}"
         print("\n" + header)
         print("-" * total_width)
 
-        # Zeilen
-        for exp in self.expenses:
+        # Zeilen mit Nummern
+        for i, exp in enumerate(self.expenses, start=1):
+            nr_field = f"{PURPLE}{i:<{nr_w}}{RESET}"
             date_field = f"{PURPLE}{exp.date:<{date_w}}{RESET}"
             cat_field = f"{GREEN}{exp.category:<{cat_w}}{RESET}"
             desc_field = f"{BLUE}{exp.description:<{desc_w}}{RESET}"
             amt_field = f"{ORANGE}{self.format_amount(exp.amount):>{amt_w}}{RESET}"
-            print(f"{date_field} | {cat_field} | {desc_field} | {amt_field}")
+            print(f"{nr_field} | {date_field} | {cat_field} | {desc_field} | {amt_field}")
 
         print("-" * total_width)
-        # Total: linke Fläche auffüllen, Amount rechtsbündig unter Amount-Spalte
-        total_label_width = date_w + 3 + cat_w + 3 + desc_w
-        print(f"{YELLOW}{'Total Expenses:':<{total_label_width}}{RESET} {ORANGE}{self.format_amount(self.get_total()):>{amt_w}}{RESET}")
+        # Gesamtausgaben (Deutsch)
+        total_label_width = nr_w + 3 + date_w + 3 + cat_w + 3 + desc_w
+        print(f"{YELLOW}{'Gesamtausgaben:':<{total_label_width}}{RESET} {ORANGE}{self.format_amount(self.get_total()):>{amt_w}}{RESET}")
 
     def get_total(self) -> float:
         return sum(exp.amount for exp in self.expenses)
@@ -215,6 +230,7 @@ TEXTS = {
 	"opt4": {"de": "Nach Datum suchen", "en": "Search by date"},
 	"opt5": {"de": "Sprache wählen (Deutsch / English)", "en": "Choose language (Deutsch / English)"},
 	"opt6": {"de": "Beenden", "en": "Exit"},
+	"opt7": {"de": "Eintrag löschen", "en": "Delete entry"},
 	"choose": {"de": "Wähle eine Option (1-6):", "en": "Choose an option (1-6):"},
 	"enter_date": {"de": "Datum eingeben (YYYY-MM-DD):", "en": "Enter date (YYYY-MM-DD):"},
 	"invalid_date": {"de": "Ungültiges Datum. Bitte im Format YYYY-MM-DD.", "en": "Invalid date. Use YYYY-MM-DD."},
@@ -225,6 +241,14 @@ TEXTS = {
 	"saved": {"de": "Eintrag gespeichert.", "en": "Entry saved."},
 	"press_enter": {"de": "Drücke Enter, um zum Menü zurückzukehren...", "en": "Press Enter to return to menu..."},
 	"goodbye": {"de": "Auf Wiedersehen!", "en": "Goodbye!"},
+	"delete_prompt": {"de": "Gebe die Nummer des zu löschenden Eintrags ein:", "en": "Enter the number of the entry to delete:"},
+	"admin_pw_prompt": {"de": "Admin-Passwort eingeben:", "en": "Enter admin password:"},
+	"pw_wrong": {"de": "Falsches Passwort. Löschvorgang abgebrochen.", "en": "Wrong password. Deletion aborted."},
+	"delete_success": {"de": "Eintrag erfolgreich gelöscht.", "en": "Entry deleted successfully."},
+	"delete_invalid": {"de": "Ungültige Nummer. Kein Eintrag gelöscht.", "en": "Invalid number. No entry deleted."},
+	"login_user": {"de": "Benutzername:", "en": "Username:"},
+	"login_pw": {"de": "Passwort:", "en": "Password:"},
+	"login_fail": {"de": "Anmeldung fehlgeschlagen. Versuche es erneut.", "en": "Login failed. Try again."},
 }
 
 def main_menu():
@@ -240,6 +264,7 @@ def main_menu():
 		print(f"{GREEN}4.{RESET} {TEXTS['opt4'][lang]}")
 		print(f"{GREEN}5.{RESET} {TEXTS['opt5'][lang]}")
 		print(f"{GREEN}6.{RESET} {TEXTS['opt6'][lang]}")
+		print(f"{GREEN}7.{RESET} {TEXTS['opt7'][lang]}")
 
 		choice = input(f"{YELLOW}{TEXTS['choose'][lang]} {RESET}").strip()
 
@@ -297,9 +322,125 @@ def main_menu():
 			print(f"{GREEN}{TEXTS['goodbye'][lang]}{RESET}")
 			break
 
+		elif choice == "7":
+			# Löschen: Nummer eingeben, Passwort prüfen, löschen
+			num_input = input(f"{YELLOW}{TEXTS['delete_prompt'][lang]} {RESET}").strip()
+			if not num_input.isdigit():
+				print(f"{RED}{TEXTS['delete_invalid'][lang]}{RESET}")
+				input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
+				continue
+			num = int(num_input)
+			pw = get_password_masked(f"{TEXTS['admin_pw_prompt'][lang]} ")
+			if pw != "1234":
+				print(f"{RED}{TEXTS['pw_wrong'][lang]}{RESET}")
+				input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
+				continue
+			if tracker.delete_entry(num):
+				print(f"{GREEN}{TEXTS['delete_success'][lang]}{RESET}")
+			else:
+				print(f"{RED}{TEXTS['delete_invalid'][lang]}{RESET}")
+			input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
+
 		else:
 			print(f"{RED}Invalid option. Please try again.{RESET}")
 			input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
+
+
+# --- neu: Benutzerverwaltung / Login ---
+def load_users(filename: str = "users.csv") -> Dict[str, str]:
+	"""
+	Lädt eine CSV mit header: username,password
+	Gibt dict username -> password zurück.
+	Wenn die Datei nicht existiert, wird sie mit einem Beispiel-admin erstellt.
+	"""
+	if not os.path.exists(filename):
+		# Beispiel-Datei anlegen
+		with open(filename, "w", newline="", encoding="utf-8") as f:
+			f.write("username,password\n")
+			f.write("admin,1234\n")
+			f.write("user,userpass\n")
+	users = {}
+	with open(filename, "r", newline="", encoding="utf-8") as f:
+		reader = csv.DictReader(f)
+		for r in reader:
+			u = (r.get("username") or "").strip()
+			p = (r.get("password") or "").strip()
+			if u:
+				users[u] = p
+	return users
+
+def authenticate_user(users: Dict[str, str], max_attempts: int = 3, lang: str = "de") -> str | None:
+	"""
+	Fragt Benutzername und Passwort ab. Gibt den Benutzernamen bei Erfolg zurück, sonst None.
+	"""
+	for attempt in range(max_attempts):
+		username = input((TEXTS["login_user"][lang] if isinstance(TEXTS.get("login_user"), dict) else TEXTS.get("login_user", "Benutzername:")) + " ").strip()
+		# maskiertes Passwort
+		password = get_password_masked((TEXTS["login_pw"][lang] if isinstance(TEXTS.get("login_pw"), dict) else TEXTS.get("login_pw", "Passwort:")) + " ")
+		expected = users.get(username)
+		if expected is not None and password == expected:
+			return username
+		print(TEXTS["login_fail"][lang] if isinstance(TEXTS.get("login_fail"), dict) else TEXTS.get("login_fail", "Anmeldung fehlgeschlagen."))
+	return None
+
+
+# get_password_masked: maskiertes Passwort-Eingabe mit '*' (Windows und Unix)
+try:
+	import msvcrt
+
+	def get_password_masked(prompt: str = "") -> str:
+		sys.stdout.write(prompt)
+		sys.stdout.flush()
+		pw_chars = []
+		while True:
+			ch = msvcrt.getwch()
+			if ch in ("\r", "\n"):
+				print()
+				break
+			if ch == "\x03":
+				raise KeyboardInterrupt
+			if ch == "\x08":  # Backspace
+				if pw_chars:
+					pw_chars.pop()
+					sys.stdout.write("\b \b")
+					sys.stdout.flush()
+			else:
+				pw_chars.append(ch)
+				sys.stdout.write("*")
+				sys.stdout.flush()
+		return "".join(pw_chars)
+
+except ImportError:
+	import tty
+	import termios
+
+	def get_password_masked(prompt: str = "") -> str:
+		sys.stdout.write(prompt)
+		sys.stdout.flush()
+		fd = sys.stdin.fileno()
+		old = termios.tcgetattr(fd)
+		pw_chars = []
+		try:
+			tty.setraw(fd)
+			while True:
+				ch = sys.stdin.read(1)
+				if ch in ("\r", "\n"):
+					sys.stdout.write("\n")
+					break
+				if ch == "\x03":
+					raise KeyboardInterrupt
+				if ch in ("\x7f", "\b"):  # Backspace/Delete
+					if pw_chars:
+						pw_chars.pop()
+						sys.stdout.write("\b \b")
+						sys.stdout.flush()
+				else:
+					pw_chars.append(ch)
+					sys.stdout.write("*")
+					sys.stdout.flush()
+		finally:
+			termios.tcsetattr(fd, termios.TCSADRAIN, old)
+		return "".join(pw_chars)
 
 
 # =============================
@@ -307,4 +448,13 @@ def main_menu():
 # =============================
 
 if __name__ == "__main__":
-    main_menu()
+	# Benutzer laden und Login ausführen (Sprache standard 'de')
+	users = load_users(os.path.join(os.path.dirname(__file__), "users.csv"))
+	# Standard-Sprache Deutsch für Login-Meldungen
+	lang0 = "de"
+	user = authenticate_user(users, max_attempts=3, lang=lang0)
+	if not user:
+		print(f"{RED}Anmeldung fehlgeschlagen. Programm wird beendet.{RESET}")
+	else:
+		# Bei erfolgreichem Login das Hauptmenü starten
+		main_menu()
