@@ -14,7 +14,6 @@ import os
 import datetime
 from typing import List, Dict
 import matplotlib.pyplot as plt
-import math
 
 # ANSI escape sequences for colors
 RESET = "\033[0m"
@@ -103,13 +102,15 @@ class ExpenseTracker:
         s = s.replace("€", "").replace(" ", "").replace("\xa0", "")
         if not s:
             raise ValueError("Leerer Betrag")
-        # Punkt+Komma => Punkt Tausender, Komma Dezimal
+        # Wenn sowohl Punkt als auch Komma vorhanden: Punkt als Tausender, Komma als Dezimal
         if "." in s and "," in s:
             s = s.replace(".", "").replace(",", ".")
         else:
             # Nur Komma => Komma als Dezimal markieren
             if "," in s and "." not in s:
                 s = s.replace(",", ".")
+            # Nur Punkt => Standard-Parsing (ggf. bereits Dezimal)
+            # Falls tausender mit space schon entfernt, ok
         return float(s)
 
     def view_expenses(self):
@@ -167,30 +168,16 @@ class ExpenseTracker:
             print("No matching expenses found.")
 
     def plot_summary(self):
-        # Zeige Kreisdiagramm nur wenn gültige positive Werte vorhanden sind
         if not self.expenses:
-            print(f"{RED}No data to plot.{RESET}")
+            print("No data to plot.")
             return
 
         category_totals = {}
         for exp in self.expenses:
-            try:
-                amt = float(exp.amount)
-            except Exception:
-                continue
-            if math.isnan(amt):
-                continue
-            category_totals[exp.category] = category_totals.get(exp.category, 0) + amt
+            category_totals[exp.category] = category_totals.get(exp.category, 0) + exp.amount
 
-        # Nur positive, gültige Beträge verwenden
-        filtered = {k: v for k, v in category_totals.items() if v is not None and not math.isnan(v) and v > 0}
-
-        if not filtered:
-            print(f"{RED}Keine positiven Beträge zum Darstellen.{RESET}")
-            return
-
-        categories = list(filtered.keys())
-        totals = list(filtered.values())
+        categories = list(category_totals.keys())
+        totals = list(category_totals.values())
 
         plt.figure(figsize=(8, 6))
         plt.pie(totals, labels=categories, autopct="%1.1f%%", startangle=90)
@@ -202,104 +189,51 @@ class ExpenseTracker:
 # User Interface
 # =============================
 
-def clear_screen():
-	# plattformunabhängig Bildschirm löschen
-	os.system("cls" if os.name == "nt" else "clear")
-
-# kurze Textressource für Deutsch/Englisch
-TEXTS = {
-	"title": {"de": "Personal Expense Tracker", "en": "Personal Expense Tracker"},
-	"opt1": {"de": "Neuen Eintrag hinzufügen", "en": "Add new expense"},
-	"opt2": {"de": "Alle Ausgaben anzeigen", "en": "View all expenses"},
-	"opt3": {"de": "Nach Kategorie suchen", "en": "Search by category"},
-	"opt4": {"de": "Nach Datum suchen", "en": "Search by date"},
-	"opt5": {"de": "Sprache wählen (Deutsch / English)", "en": "Choose language (Deutsch / English)"},
-	"opt6": {"de": "Beenden", "en": "Exit"},
-	"choose": {"de": "Wähle eine Option (1-6):", "en": "Choose an option (1-6):"},
-	"enter_date": {"de": "Datum eingeben (YYYY-MM-DD):", "en": "Enter date (YYYY-MM-DD):"},
-	"invalid_date": {"de": "Ungültiges Datum. Bitte im Format YYYY-MM-DD.", "en": "Invalid date. Use YYYY-MM-DD."},
-	"enter_category": {"de": "Kategorie eingeben:", "en": "Enter category:"},
-	"enter_description": {"de": "Beschreibung eingeben:", "en": "Enter description:"},
-	"enter_amount": {"de": "Betrag eingeben (z.B. 1.234,50 oder 1,50):", "en": "Enter amount (e.g. 1.234,50 or 1.50):"},
-	"invalid_amount": {"de": "Ungültiges Betragsformat. Bitte z.B. 1,50 oder 1.234,50 eingeben.", "en": "Invalid amount format. Use e.g. 1.50 or 1,234.50."},
-	"saved": {"de": "Eintrag gespeichert.", "en": "Entry saved."},
-	"press_enter": {"de": "Drücke Enter, um zum Menü zurückzukehren...", "en": "Press Enter to return to menu..."},
-	"goodbye": {"de": "Auf Wiedersehen!", "en": "Goodbye!"},
-}
-
 def main_menu():
-	tracker = ExpenseTracker()
-	lang = "de"  # Standard: Deutsch
+    tracker = ExpenseTracker()
 
-	while True:
-		clear_screen()
-		print(f"\n{CYAN}=== {TEXTS['title'][lang]} ==={RESET}")
-		print(f"{GREEN}1.{RESET} {TEXTS['opt1'][lang]}")
-		print(f"{GREEN}2.{RESET} {TEXTS['opt2'][lang]}")
-		print(f"{GREEN}3.{RESET} {TEXTS['opt3'][lang]}")
-		print(f"{GREEN}4.{RESET} {TEXTS['opt4'][lang]}")
-		print(f"{GREEN}5.{RESET} {TEXTS['opt5'][lang]}")
-		print(f"{GREEN}6.{RESET} {TEXTS['opt6'][lang]}")
+    while True:
+        print(f"\n{CYAN}=== Personal Expense Tracker ==={RESET}")
+        print(f"{GREEN}1.{RESET} Add new expense")
+        print(f"{GREEN}2.{RESET} View all expenses")
+        print(f"{GREEN}3.{RESET} Search by category")
+        print(f"{GREEN}4.{RESET} Search by date")
+        print(f"{GREEN}5.{RESET} Show summary chart")
+        print(f"{GREEN}6.{RESET} Exit")
 
-		choice = input(f"{YELLOW}{TEXTS['choose'][lang]} {RESET}").strip()
+        choice = input(f"{YELLOW}Choose an option (1-6): {RESET}").strip()
 
-		if choice == "1":
-			try:
-				date = input(f"{YELLOW}{TEXTS['enter_date'][lang]} {RESET}").strip()
-				datetime.datetime.strptime(date, "%Y-%m-%d")
-			except Exception:
-				print(f"{RED}{TEXTS['invalid_date'][lang]}{RESET}")
-				input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
-				continue
-			category = input(f"{YELLOW}{TEXTS['enter_category'][lang]} {RESET}").strip()
-			description = input(f"{YELLOW}{TEXTS['enter_description'][lang]} {RESET}").strip()
-			amount_input = input(f"{YELLOW}{TEXTS['enter_amount'][lang]} {RESET}").strip()
-			try:
-				amount = tracker.parse_amount(amount_input)
-			except Exception:
-				print(f"{RED}{TEXTS['invalid_amount'][lang]}{RESET}")
-				input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
-				continue
-			tracker.add_expense(Expense(date, category, description, amount))
-			print(f"{GREEN}{TEXTS['saved'][lang]}{RESET}")
-			input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
-
-		elif choice == "2":
-			tracker.view_expenses()
-			input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
-
-		elif choice == "3":
-			category = input(f"{YELLOW}{TEXTS['enter_category'][lang]} {RESET}").strip()
-			tracker.search_by_category(category)
-			input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
-
-		elif choice == "4":
-			date = input(f"{YELLOW}{TEXTS['enter_date'][lang]} {RESET}").strip()
-			tracker.search_by_date(date)
-			input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
-
-		elif choice == "5":
-			# Sprache wählen
-			clear_screen()
-			print(f"{CYAN}1. Deutsch{RESET}")
-			print(f"{CYAN}2. English{RESET}")
-			lang_choice = input(f"{YELLOW}Wähle 1 oder 2 (oder gib 'de'/'en' ein): {RESET}").strip().lower()
-			if lang_choice in ("1", "de", "deutsch"):
-				lang = "de"
-			elif lang_choice in ("2", "en", "english", "englisch"):
-				lang = "en"
-			else:
-				# ungültig => beibehalten und kurze Meldung
-				print(f"{RED}Ungültige Auswahl. Sprache bleibt {lang}.{RESET}")
-				input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
-
-		elif choice == "6":
-			print(f"{GREEN}{TEXTS['goodbye'][lang]}{RESET}")
-			break
-
-		else:
-			print(f"{RED}Invalid option. Please try again.{RESET}")
-			input(f"{YELLOW}{TEXTS['press_enter'][lang]}{RESET}")
+        if choice == "1":
+            try:
+                date = input(f"{YELLOW}Enter date (YYYY-MM-DD): {RESET}").strip()
+                # validate date
+                datetime.datetime.strptime(date, "%Y-%m-%d")
+                category = input(f"{YELLOW}Enter category: {RESET}").strip()
+                description = input(f"{YELLOW}Enter description: {RESET}").strip()
+                amount_input = input(f"{YELLOW}Enter amount (z.B. 1.234,50 oder 1,50): {RESET}").strip()
+                try:
+                    amount = tracker.parse_amount(amount_input)
+                except ValueError:
+                    print(f"{RED}Ungültiges Betragsformat. Bitte z.B. 1,50 oder 1.234,50 eingeben.{RESET}")
+                    continue
+                tracker.add_expense(Expense(date, category, description, amount))
+            except ValueError:
+                print(f"{RED}Invalid input. Please check your entries.{RESET}")
+        elif choice == "2":
+            tracker.view_expenses()
+        elif choice == "3":
+            category = input(f"{YELLOW}Enter category to search: {RESET}").strip()
+            tracker.search_by_category(category)
+        elif choice == "4":
+            date = input(f"{YELLOW}Enter date to search (YYYY-MM-DD): {RESET}").strip()
+            tracker.search_by_date(date)
+        elif choice == "5":
+            tracker.plot_summary()
+        elif choice == "6":
+            print(f"{GREEN}Goodbye!{RESET}")
+            break
+        else:
+            print(f"{RED}Invalid option. Please try again.{RESET}")
 
 
 # =============================
