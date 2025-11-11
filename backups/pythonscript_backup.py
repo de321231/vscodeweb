@@ -14,6 +14,7 @@ import os
 import datetime
 from typing import List, Dict
 import matplotlib.pyplot as plt
+import math
 
 # =============================
 # Data Model
@@ -70,16 +71,51 @@ class ExpenseTracker:
             self.expenses = [Expense(r["date"], r["category"], r["description"], float(r["amount"])) for r in reader]
         print(f"Loaded {len(self.expenses)} expenses from file.")
 
+    def format_amount(self, amount: float) -> str:
+        s = f"{amount:,.2f}"
+        s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"{s}€"
+
+    def parse_amount(self, s: str) -> float:
+        if s is None:
+            raise ValueError("Kein Betrag angegeben")
+        s = s.strip()
+        s = s.replace("€", "").replace(" ", "").replace("\xa0", "")
+        if not s:
+            raise ValueError("Leerer Betrag")
+        if "." in s and "," in s:
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            if "," in s and "." not in s:
+                s = s.replace(",", ".")
+        return float(s)
+
     def view_expenses(self):
         if not self.expenses:
             print("No expenses recorded yet.")
             return
-        print("\nDate       | Category        | Description                   | Amount")
-        print("-" * 70)
+        date_w = max(10, max((len(exp.date) for exp in self.expenses), default=10))
+        cat_w = max(len("Category"), max((len(exp.category) for exp in self.expenses), default=8))
+        desc_w = max(len("Description"), max((len(exp.description) for exp in self.expenses), default=30))
+        all_amounts = [self.format_amount(exp.amount) for exp in self.expenses]
+        all_amounts.append(self.format_amount(self.get_total()))
+        amt_w = max(len("Amount"), max((len(a) for a in all_amounts), default=12))
+        total_width = date_w + 3 + cat_w + 3 + desc_w + 3 + amt_w
+
+        header = f"{'Date':<{date_w}} | {'Category':<{cat_w}} | {'Description':<{desc_w}} | {'Amount':>{amt_w}}"
+        print("\n" + header)
+        print("-" * total_width)
+
         for exp in self.expenses:
-            print(exp)
-        print("-" * 70)
-        print(f"Total Expenses: ${self.get_total():.2f}")
+            date_field = f"{exp.date:<{date_w}}"
+            cat_field = f"{exp.category:<{cat_w}}"
+            desc_field = f"{exp.description:<{desc_w}}"
+            amt_field = f"{self.format_amount(exp.amount):>{amt_w}}"
+            print(f"{date_field} | {cat_field} | {desc_field} | {amt_field}")
+
+        print("-" * total_width)
+        total_label_width = date_w + 3 + cat_w + 3 + desc_w
+        print(f"{'Total Expenses:':<{total_label_width}} {self.format_amount(self.get_total()):>{amt_w}}")
 
     def get_total(self) -> float:
         return sum(exp.amount for exp in self.expenses)
@@ -104,14 +140,21 @@ class ExpenseTracker:
         if not self.expenses:
             print("No data to plot.")
             return
-
         category_totals = {}
         for exp in self.expenses:
-            category_totals[exp.category] = category_totals.get(exp.category, 0) + exp.amount
-
-        categories = list(category_totals.keys())
-        totals = list(category_totals.values())
-
+            try:
+                amt = float(exp.amount)
+            except Exception:
+                continue
+            if math.isnan(amt):
+                continue
+            category_totals[exp.category] = category_totals.get(exp.category, 0) + amt
+        filtered = {k: v for k, v in category_totals.items() if v is not None and not math.isnan(v) and v > 0}
+        if not filtered:
+            print("Keine positiven Beträge zum Darstellen.")
+            return
+        categories = list(filtered.keys())
+        totals = list(filtered.values())
         plt.figure(figsize=(8, 6))
         plt.pie(totals, labels=categories, autopct="%1.1f%%", startangle=90)
         plt.title("Expense Breakdown by Category")
@@ -143,7 +186,8 @@ def main_menu():
                 datetime.datetime.strptime(date, "%Y-%m-%d")
                 category = input("Enter category: ").strip()
                 description = input("Enter description: ").strip()
-                amount = float(input("Enter amount: ").strip())
+                amount_input = input("Enter amount: ").strip()
+                amount = tracker.parse_amount(amount_input)
                 tracker.add_expense(Expense(date, category, description, amount))
             except ValueError:
                 print("Invalid input. Please check your entries.")
